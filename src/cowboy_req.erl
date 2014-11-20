@@ -675,8 +675,13 @@ part(Req, Opts) ->
 	{Data, Req2} = stream_multipart(Req, Opts),
 	part(Data, Opts, Req2).
 
-part(Buffer, Opts, Req=#http_req{multipart={Boundary, _}}) ->
+part(Buffer, Opts, Req=#http_req{multipart={Boundary, _}, body_state=BodyState}) ->
 	case cow_multipart:parse_headers(Buffer, Boundary) of
+		% Be resilient to clients who break the protocol
+		more when BodyState =:= done ->
+			{done, Req#http_req{multipart=undefined}};
+		{more, _} when BodyState =:= done ->
+			{done, Req#http_req{multipart=undefined}};
 		more ->
 			{Data, Req2} = stream_multipart(Req, Opts),
 			part(<< Buffer/binary, Data/binary >>, Opts, Req2);
